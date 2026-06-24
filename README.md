@@ -45,29 +45,84 @@ control. (On/off works on any GPIO, but brightness is nicest on GPIO18.)
 
 ---
 
-## 2. Software — set up the Pi
+## 2. First boot — get a terminal on the Pi (headless, from a Mac)
 
-On a fresh **Raspberry Pi OS (Bookworm)**, clone this repo and install:
+The Pi Zero 2 W has no easy keyboard/monitor port, so set it up **headless**
+(over WiFi) and connect with SSH. You configure SSH + WiFi *while flashing the
+SD card*, so the Pi joins your network and is reachable the moment it boots.
+
+**a. Flash the card with Raspberry Pi Imager** (download from
+raspberrypi.com/software):
+
+1. **Choose Device:** Raspberry Pi Zero 2 W
+2. **Choose OS:** Raspberry Pi OS (Lite is fine — no desktop needed)
+3. **Choose Storage:** your SD card
+4. Click **Next → "Edit Settings"** and set:
+   - **Hostname:** `raspberrypi`
+   - **Enable SSH** → *Use password authentication*
+   - **Username:** `pi` · **Password:** something you'll remember
+   - **Configure wireless LAN:** your WiFi **SSID + password**
+   - **Wireless LAN country:** your country (the radio stays off until this is set)
+5. **Save → Write**, then wait for it to finish and verify.
+
+**b. Boot the Pi:** insert the card, plug power into the **PWR** micro-USB port
+(the outer one). Wait **~60–90 seconds** on first boot (it expands the
+filesystem and joins WiFi).
+
+**c. SSH in from your Mac's Terminal:**
+
+```bash
+ssh pi@raspberrypi.local
+```
+
+Type `yes` to accept the host key the first time, then enter your password. The
+prompt `pi@raspberrypi:~ $` means you're on the Pi. Run everything below here.
+
+**If `raspberrypi.local` doesn't resolve**, the Pi probably isn't on WiFi yet,
+or you need its IP. Find it from your router's device list, or scan:
+
+```bash
+ping raspberrypi.local        # works → name is fine
+arp -a | grep -iE 'b8:27:eb|dc:a6:32|d8:3a:dd|e4:5f:01'   # common Pi MAC prefixes
+```
+
+Then `ssh pi@<that-ip>`.
+
+---
+
+## 3. Software — set up the Pi
+
+Once you're SSH'd in, install everything with the helper script:
+
+```bash
+sudo apt update && sudo apt install -y git
+git clone https://github.com/jimchh/rpi-wifi-led.git
+cd rpi-wifi-led
+./setup.sh          # creates venv, installs deps
+source venv/bin/activate
+python app.py
+```
+
+<details>
+<summary>…or do it manually instead of <code>setup.sh</code></summary>
 
 ```bash
 sudo apt update
 sudo apt install -y python3-venv python3-pip git
-
 git clone https://github.com/jimchh/rpi-wifi-led.git
 cd rpi-wifi-led
-
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-
 python app.py
 ```
+</details>
 
 You'll see `Running on http://0.0.0.0:5000`. Leave it running.
 
 ---
 
-## 3. Connect from your Mac / PC
+## 4. Connect from your Mac / PC
 
 Find the Pi's IP address (run on the Pi):
 
@@ -89,7 +144,7 @@ That's it — clicking toggles the physical LED.
 
 ---
 
-## 4. Networking: make sure Pi + computer share a network
+## 5. Networking: make sure Pi + computer share a network
 
 ### Option A — Join your home WiFi router (simplest)
 
@@ -124,7 +179,7 @@ can't also be on your home WiFi — it's one or the other.)
 
 ---
 
-## 5. Run automatically on boot (optional)
+## 6. Run automatically on boot (optional)
 
 So you don't have to start `app.py` by hand each time:
 
