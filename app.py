@@ -26,13 +26,28 @@ led = PWMLED(LED_PIN)
 
 app = Flask(__name__)
 
+# Effects map to gpiozero's built-in background animations. "none" = solid.
+EFFECTS = ("none", "blink", "breathe", "strobe")
+
 # In-memory state so the UI can reflect the current value after a refresh.
-state = {"on": False, "brightness": 1.0}
+state = {"on": False, "brightness": 1.0, "effect": "none"}
 
 
 def apply_state():
-    """Push the current state object to the physical LED."""
-    led.value = state["brightness"] if state["on"] else 0.0
+    """Push the current state object to the physical LED.
+
+    For solid output we set led.value directly — its setter cancels any
+    running blink/pulse thread. For effects we hand off to gpiozero's
+    background animations (each call also stops the previous one).
+    """
+    if not state["on"] or state["effect"] == "none":
+        led.value = state["brightness"] if state["on"] else 0.0
+    elif state["effect"] == "blink":
+        led.blink(on_time=0.5, off_time=0.5, background=True)
+    elif state["effect"] == "strobe":
+        led.blink(on_time=0.05, off_time=0.05, background=True)
+    elif state["effect"] == "breathe":
+        led.pulse(fade_in_time=1.0, fade_out_time=1.0, background=True)
 
 
 PAGE = """<!doctype html>
@@ -52,6 +67,10 @@ PAGE = """<!doctype html>
   button.off { background: #555; }
   input[type=range] { width: 100%; margin: 24px 0 8px; }
   .row { margin: 24px 0; }
+  .effects { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .effects button { font-size: .95rem; padding: 8px 16px; background: #e6e6e6;
+                    color: #222; }
+  .effects button.active { background: #2d7ff9; color: #fff; }
   small { opacity: .6; }
 </style>
 </head>
@@ -66,12 +85,19 @@ PAGE = """<!doctype html>
     <input type="range" id="bright" min="0" max="100" value="100">
     <div><span id="pct">100</span>%</div>
   </div>
+  <div class="row effects">
+    <button data-fx="none">Solid</button>
+    <button data-fx="blink">Blink</button>
+    <button data-fx="breathe">Breathe</button>
+    <button data-fx="strobe">Strobe</button>
+  </div>
   <small>GPIO pin (BCM): __LED_PIN__</small>
 <script>
 const bulb = document.getElementById('bulb');
 const toggle = document.getElementById('toggle');
 const bright = document.getElementById('bright');
 const pct = document.getElementById('pct');
+const fxButtons = document.querySelectorAll('.effects button');
 
 function render(s) {
   toggle.textContent = s.on ? 'Turn OFF' : 'Turn ON';
@@ -80,6 +106,11 @@ function render(s) {
   pct.textContent = bright.value;
   bulb.style.opacity = s.on ? (0.25 + 0.75 * s.brightness) : 0.15;
   bulb.style.filter = s.on ? 'none' : 'grayscale(1)';
+  // Brightness only applies to solid mode; dim the slider during effects.
+  const solid = (s.effect || 'none') === 'none';
+  bright.disabled = !solid;
+  fxButtons.forEach(b => b.classList.toggle(
+    'active', s.on && b.dataset.fx === (s.effect || 'none')));
 }
 
 async function send(path, body) {
@@ -94,6 +125,7 @@ async function send(path, body) {
 toggle.onclick = () => send('/toggle');
 bright.oninput = () => { pct.textContent = bright.value; };
 bright.onchange = () => send('/brightness', {value: bright.value / 100});
+fxButtons.forEach(b => b.onclick = () => send('/effect', {name: b.dataset.fx}));
 
 // Load initial state.
 fetch('/state').then(r => r.json()).then(render);
@@ -116,6 +148,7 @@ def get_state():
 @app.route("/toggle", methods=["POST"])
 def toggle():
     state["on"] = not state["on"]
+    state["effect"] = "none"
     apply_state()
     return jsonify(state)
 
@@ -123,6 +156,7 @@ def toggle():
 @app.route("/on", methods=["POST"])
 def on():
     state["on"] = True
+    state["effect"] = "none"
     apply_state()
     return jsonify(state)
 
@@ -130,6 +164,7 @@ def on():
 @app.route("/off", methods=["POST"])
 def off():
     state["on"] = False
+    state["effect"] = "none"
     apply_state()
     return jsonify(state)
 
@@ -142,9 +177,23 @@ def brightness():
     except (TypeError, ValueError):
         return jsonify({"error": "value must be a number 0.0–1.0"}), 400
     state["brightness"] = max(0.0, min(1.0, value))
-    # Adjusting brightness implies the light should be on.
+    # Adjusting brightness implies solid output and the light on.
+    state["effect"] = "none"
     if state["brightness"] > 0:
         state["on"] = True
+    apply_state()
+    return jsonify(state)
+
+
+@app.route("/effect", methods=["POST"])
+def effect():
+    data = request.get_json(silent=True) or {}
+    name = data.get("name")
+    if name not in EFFECTS:
+        return jsonify({"error": "name must be one of %s" % (EFFECTS,)}), 400
+    state["effect"] = name
+    # Selecting any effect (including 'none'/solid) turns the LED on.
+    state["on"] = True
     apply_state()
     return jsonify(state)
 
