@@ -1,23 +1,19 @@
 #!/usr/bin/env bash
 # One-shot setup for rpi-wifi-led on Raspberry Pi OS.
 # Run from the repo directory on the Pi:  ./setup.sh
+#
+# We install Flask + the GPIO stack from apt (prebuilt for the Pi) rather than
+# compiling them with pip. lgpio is a C extension; building it from source needs
+# swig + a toolchain and breaks on newer Raspberry Pi OS (Trixie / Python 3.13).
+# The apt packages are prebuilt, so there's nothing to compile and no venv to
+# manage — gpiozero auto-detects the apt lgpio backend.
 set -euo pipefail
 
-echo "==> Installing system packages (python venv + build tools for lgpio)…"
+echo "==> Installing prebuilt dependencies from apt (no compiler needed)…"
 sudo apt update
-# swig, python3-dev and a compiler are needed to build the lgpio GPIO
-# library from source on newer Raspberry Pi OS (Trixie / Python 3.13),
-# where no prebuilt wheel is published yet.
-sudo apt install -y python3-venv python3-pip swig python3-dev build-essential
-
-echo "==> Creating virtual environment…"
-python3 -m venv venv
-
-echo "==> Installing Python dependencies…"
-./venv/bin/pip install --upgrade pip
-./venv/bin/pip install -r requirements.txt
+sudo apt install -y python3-flask python3-gpiozero python3-lgpio
 
 echo
-echo "Done. Start the server with:"
-echo "    source venv/bin/activate && python app.py"
+echo "Done — no virtualenv needed. Start the server with:"
+echo "    python3 app.py"
 echo "Then open  http://$(hostname -I | awk '{print $1}'):5000  from your Mac/PC."

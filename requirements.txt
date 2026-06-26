@@ -1,5 +1,9 @@
+# NOTE: On a Raspberry Pi, prefer the prebuilt apt packages instead of pip —
+# see setup.sh / README. lgpio is a C extension and compiling it from source
+# (which pip does on Raspberry Pi OS Trixie / Python 3.13) needs a toolchain and
+# often fails. Install with:
+#   sudo apt install -y python3-flask python3-gpiozero python3-lgpio
+# This file is kept for reference and for non-Pi / development environments.
 flask>=3.0
 gpiozero>=2.0
-# Backend that gpiozero uses to talk to the GPIO pins.
-# lgpio works on current Raspberry Pi OS (Bookworm) including the Pi Zero 2 W.
 lgpio>=0.2

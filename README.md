@@ -98,9 +98,8 @@ Once you're SSH'd in, install everything with the helper script:
 sudo apt update && sudo apt install -y git
 git clone https://github.com/jimchh/rpi-wifi-led.git
 cd rpi-wifi-led
-./setup.sh          # creates venv, installs deps
-source venv/bin/activate
-python app.py
+./setup.sh          # installs Flask + GPIO libs from apt (prebuilt)
+python3 app.py
 ```
 
 <details>
@@ -108,14 +107,16 @@ python app.py
 
 ```bash
 sudo apt update
-sudo apt install -y python3-venv python3-pip git
+sudo apt install -y git python3-flask python3-gpiozero python3-lgpio
 git clone https://github.com/jimchh/rpi-wifi-led.git
 cd rpi-wifi-led
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-python app.py
+python3 app.py
 ```
+
+We use the **apt** packages (`python3-flask`, `python3-gpiozero`,
+`python3-lgpio`) rather than `pip install` because they're prebuilt for the Pi —
+no compiler, no virtualenv, nothing to build. `requirements.txt` is kept only
+for reference / non-Pi setups; on the Pi, prefer apt.
 </details>
 
 You'll see `Running on http://0.0.0.0:5000`. Leave it running.
