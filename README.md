@@ -2,7 +2,8 @@
 
 Control an LED on a **Raspberry Pi Zero 2 W** GPIO from your **Mac or PC over WiFi** —
 no internet required. The Pi runs a tiny web server; you open its address in a
-browser and toggle the LED / set brightness.
+browser to toggle the LED, set brightness, and run effects (blink / breathe /
+strobe).
 
 > "Regardless the internet is available" → you don't need the *internet*, only a
 > shared *local network* between the Pi and your computer. Two ways to get that
@@ -98,9 +99,8 @@ Once you're SSH'd in, install everything with the helper script:
 sudo apt update && sudo apt install -y git
 git clone https://github.com/jimchh/rpi-wifi-led.git
 cd rpi-wifi-led
-./setup.sh          # creates venv, installs deps
-source venv/bin/activate
-python app.py
+./setup.sh          # installs Flask + GPIO libs from apt (prebuilt)
+python3 app.py
 ```
 
 <details>
@@ -108,14 +108,16 @@ python app.py
 
 ```bash
 sudo apt update
-sudo apt install -y python3-venv python3-pip git
+sudo apt install -y git python3-flask python3-gpiozero python3-lgpio
 git clone https://github.com/jimchh/rpi-wifi-led.git
 cd rpi-wifi-led
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-python app.py
+python3 app.py
 ```
+
+We use the **apt** packages (`python3-flask`, `python3-gpiozero`,
+`python3-lgpio`) rather than `pip install` because they're prebuilt for the Pi —
+no compiler, no virtualenv, nothing to build. `requirements.txt` is kept only
+for reference / non-Pi setups; on the Pi, prefer apt.
 </details>
 
 You'll see `Running on http://0.0.0.0:5000`. Leave it running.
@@ -181,16 +183,74 @@ can't also be on your home WiFi — it's one or the other.)
 
 ## 6. Run automatically on boot (optional)
 
-So you don't have to start `app.py` by hand each time:
+So you don't have to start `app.py` by hand each time, install the systemd
+service with the helper (it fills in your username and repo path automatically):
+
+```bash
+./install-service.sh
+```
+
+Now the server starts on every boot — just apply power and browse to the Pi.
+Useful commands:
+
+```bash
+systemctl status rpi-wifi-led        # is it running?
+journalctl -u rpi-wifi-led -f        # live logs
+sudo systemctl restart rpi-wifi-led  # after editing app.py
+sudo systemctl disable --now rpi-wifi-led   # turn autostart off
+```
+
+<details>
+<summary>…or install it manually</summary>
 
 ```bash
 sudo cp rpi-wifi-led.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now rpi-wifi-led
 ```
+Edit the `User=`/paths in the `.service` file if you didn't clone into
+`/home/pi/rpi-wifi-led`.
+</details>
 
-Check it: `systemctl status rpi-wifi-led`. Edit the `User=`/paths in the
-`.service` file if you didn't clone into `/home/pi/rpi-wifi-led`.
+---
+
+## 7. Powering from a battery
+
+The Pi Zero 2 W draws roughly (measured at 5 V):
+
+| State | Current | Power |
+|-------|---------|-------|
+| Idle, headless, WiFi on | ~100–130 mA | ~0.5–0.65 W |
+| This project (server idle + LED) | ~120–180 mA | ~0.6–0.9 W |
+| Busy / WiFi active | ~200–300 mA | ~1.0–1.5 W |
+| All 4 cores maxed | ~400–500 mA | ~2.0–2.5 W |
+
+The LED through the 330 Ω resistor adds only ~4–10 mA. Plan around **~150 mA
+average** for this project.
+
+**Runtime estimate.** Power banks are rated at the 3.7 V cell, but you draw at
+5 V through a ~85–90% efficient converter, so usable capacity at 5 V ≈
+`rated mAh × ~0.65`. Runtime ≈ that ÷ average mA:
+
+| Power bank | Usable @5 V | Runtime @~150 mA |
+|------------|-------------|------------------|
+| 5,000 mAh  | ~3,300 mAh  | ~22 h (≈1 day)   |
+| 10,000 mAh | ~6,500 mAh  | ~43 h (≈2 days)  |
+| 20,000 mAh | ~13,000 mAh | ~87 h (≈3.5 days)|
+
+**Two gotchas:**
+
+- Many power banks **auto-shut-off** when draw drops below ~50–100 mA — right
+  where an idle Zero 2 W sits — so it may switch off on its own. Choose a bank
+  with a "low-current / always-on" mode.
+- Power the **PWR** micro-USB port (outer one) with a good-quality cable; thin
+  cables sag and trigger low-voltage warnings.
+
+For an always-on setup that recharges while running, use a UPS/battery HAT made
+for the Zero footprint (e.g. **PiSugar 2/3**, **Waveshare UPS HAT**) instead of a
+plain power bank — it powers the Pi, charges the cell, and cuts over cleanly.
+Li-ion cells last ~300–500 charge cycles, so recharging every couple of days
+gives years of service.
 
 ---
 
@@ -206,12 +266,19 @@ All return the current state as JSON: `{"on": true, "brightness": 1.0}`.
 | POST   | `/on`          | —                          | Turn on               |
 | POST   | `/off`         | —                          | Turn off              |
 | POST   | `/brightness`  | `{"value": 0.5}` (0.0–1.0) | Set brightness        |
+| POST   | `/effect`      | `{"name": "blink"}`        | Run an effect         |
+
+`effect` names: `none` (solid), `blink`, `breathe` (fade in/out), `strobe`.
+Selecting an effect turns the LED on; pressing on/off/brightness returns it to
+solid mode. State JSON includes the active effect, e.g.
+`{"on": true, "brightness": 1.0, "effect": "breathe"}`.
 
 Example from your Mac/PC:
 
 ```bash
 curl -X POST http://192.168.1.42:5000/on
 curl -X POST http://192.168.1.42:5000/brightness -H 'Content-Type: application/json' -d '{"value":0.3}'
+curl -X POST http://192.168.1.42:5000/effect -H 'Content-Type: application/json' -d '{"name":"breathe"}'
 ```
 
 ---
