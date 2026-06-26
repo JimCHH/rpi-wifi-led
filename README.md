@@ -220,9 +220,14 @@ curl -X POST http://192.168.1.42:5000/brightness -H 'Content-Type: application/j
 
 - **Page won't load from Mac/PC:** confirm both devices are on the same network
   and you used the Pi's real IP (`hostname -I`). Port is `5000`.
-- **`gpiozero`/`lgpio` errors:** make sure you're on Raspberry Pi OS Bookworm and
+- **`gpiozero`/`lgpio` errors:** make sure you're on Raspberry Pi OS and
   installed `requirements.txt` inside the venv. On older OS versions use
   `RPi.GPIO` or `pigpio` as the backend instead.
+- **`error: command 'swig' failed` building `lgpio`:** on newer Raspberry Pi OS
+  (Trixie / Python 3.13) `lgpio` compiles from source and needs build tools.
+  Install them and retry:
+  `sudo apt install -y swig python3-dev build-essential && pip install -r requirements.txt`
+  (`setup.sh` already does this for you.)
 - **LED never lights:** check the LED isn't reversed (long leg toward the
   resistor/GPIO18), and that the resistor is in series.
 - **Change the pin:** set `LED_PIN` (BCM number), e.g. `LED_PIN=23 python app.py`.
