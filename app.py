@@ -29,6 +29,10 @@ EFFECTS = ("none", "blink", "breathe", "strobe")
 PINS = [int(p) for p in os.environ.get("LED_PINS", "18,23").split(",") if p.strip()]
 _names = [n.strip() for n in os.environ.get("LED_NAMES", "").split(",")]
 
+# PWM frequency (Hz). gpiozero defaults to 100 Hz, which can look flickery/steppy
+# when dimming; 1000 Hz is smooth and flicker-free. Override with PWM_HZ.
+PWM_HZ = int(os.environ.get("PWM_HZ", "1000"))
+
 # Build the light registry: id -> {led, name, pin, state}. `order` keeps the
 # UI/JSON ordering stable (dicts preserve insertion order, but be explicit).
 lights = {}
@@ -37,7 +41,7 @@ for i, pin in enumerate(PINS):
     lid = "light%d" % (i + 1)
     name = _names[i] if i < len(_names) and _names[i] else "Light %d" % (i + 1)
     lights[lid] = {
-        "led": PWMLED(pin),
+        "led": PWMLED(pin, frequency=PWM_HZ),
         "name": name,
         "pin": pin,
         # In-memory state so the UI can reflect values after a refresh.
